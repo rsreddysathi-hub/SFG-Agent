@@ -67,7 +67,9 @@
         "url": "https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/?limit=10",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
-        "options": {}
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
       },
       "id": "tool-get-files",
       "name": "Get Files",
