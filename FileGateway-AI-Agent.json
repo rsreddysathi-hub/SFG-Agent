@@ -87,10 +87,10 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {"name": "fileName", "value": "={{ $parameter.fileName }}"},
-            {"name": "arrivedFileState", "value": "={{ $parameter.arrivedFileState }}"},
-            {"name": "prodOrgName", "value": "={{ $parameter.prodOrgName }}"},
-            {"name": "limit", "value": "={{ $parameter.limit || 10 }}"}
+            {"name": "fileName", "value": "{{ $parameter.fileName }}"},
+            {"name": "arrivedFileState", "value": "{{ $parameter.arrivedFileState }}"},
+            {"name": "prodOrgName", "value": "{{ $parameter.prodOrgName }}"},
+            {"name": "limit", "value": "{{ $parameter.limit }}"}
           ]
         },
         "placeholderDefinitions": {
