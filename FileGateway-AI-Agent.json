@@ -79,7 +79,7 @@
     {
       "parameters": {
         "name": "queryFiles",
-        "description": "Search arrived files. Parameters: fileName (string), arrivedFileState (string), prodOrgName (string), limit (number). All optional.",
+        "description": "Search arrived files. Call this tool to get a list of files. Returns all files by default.",
         "method": "GET",
         "url": "https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/",
         "authentication": "predefinedCredentialType",
@@ -87,18 +87,7 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {"name": "fileName", "value": "{{ $parameter.fileName }}"},
-            {"name": "arrivedFileState", "value": "{{ $parameter.arrivedFileState }}"},
-            {"name": "prodOrgName", "value": "{{ $parameter.prodOrgName }}"},
-            {"name": "limit", "value": "{{ $parameter.limit }}"}
-          ]
-        },
-        "placeholderDefinitions": {
-          "values": [
-            {"name": "fileName", "type": "string", "description": "File name to search"},
-            {"name": "arrivedFileState", "type": "string", "description": "File state (ERROR, PROCESSED, etc.)"},
-            {"name": "prodOrgName", "type": "string", "description": "Producer organization name"},
-            {"name": "limit", "type": "number", "description": "Max results (default 10)"}
+            {"name": "limit", "value": "10"}
           ]
         },
         "options": {}
