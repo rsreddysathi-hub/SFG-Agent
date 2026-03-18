@@ -68,7 +68,7 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
         "options": {
-          "allowUnauthorizedCerts": true
+          "skipSslCertificateValidation": true
         }
       },
       "id": "tool-get-files",
