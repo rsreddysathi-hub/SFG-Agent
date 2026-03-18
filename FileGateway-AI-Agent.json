@@ -35,7 +35,7 @@
     {
       "parameters": {
         "options": {
-          "systemMessage": "You are a helpful AI assistant for IBM Sterling File Gateway.\n\nBe friendly and conversational. Ask clarifying questions before taking actions. Only call tools when the user explicitly requests an action.\n\nAvailable tools:\n- queryFiles: Search files\n- updateFile: Update file status\n- redeliverFile: Redeliver a file\n- replayFile: Replay a file"
+          "systemMessage": "You are a helpful AI assistant for IBM Sterling File Gateway.\n\nBe friendly and conversational. Ask clarifying questions before taking actions. Only call tools when the user explicitly requests an action.\n\nAvailable tools:\n- queryFiles: Search files by fileName, arrivedFileState, prodOrgName, limit\n- updateFile: Update file status (needs id and reviewUpdate)\n- redeliverFile: Redeliver a file (needs id, optional comment)\n- replayFile: Replay a file (needs id, optional comment)"
         }
       },
       "id": "ai-agent",
@@ -79,18 +79,26 @@
     {
       "parameters": {
         "name": "queryFiles",
-        "description": "Search arrived files. Optional parameters: fileName, arrivedFileState, prodOrgName, limit (default 10)",
+        "description": "Search arrived files. Parameters: fileName (string), arrivedFileState (string), prodOrgName (string), limit (number). All optional.",
         "method": "GET",
-        "url": "https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/",
+        "url": "https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {"name": "fileName", "value": ""},
-            {"name": "arrivedFileState", "value": ""},
-            {"name": "prodOrgName", "value": ""},
-            {"name": "limit", "value": "10"}
+            {"name": "fileName", "value": "={{ $parameter.fileName }}"},
+            {"name": "arrivedFileState", "value": "={{ $parameter.arrivedFileState }}"},
+            {"name": "prodOrgName", "value": "={{ $parameter.prodOrgName }}"},
+            {"name": "limit", "value": "={{ $parameter.limit || 10 }}"}
+          ]
+        },
+        "placeholderDefinitions": {
+          "values": [
+            {"name": "fileName", "type": "string", "description": "File name to search"},
+            {"name": "arrivedFileState", "type": "string", "description": "File state (ERROR, PROCESSED, etc.)"},
+            {"name": "prodOrgName", "type": "string", "description": "Producer organization name"},
+            {"name": "limit", "type": "number", "description": "Max results (default 10)"}
           ]
         },
         "options": {}
@@ -110,14 +118,20 @@
     {
       "parameters": {
         "name": "updateFile",
-        "description": "Update file review status. Required: id (number), reviewUpdate (boolean)",
+        "description": "Update file review status. Required: id (number), reviewUpdate (boolean - true for reviewed, false for not reviewed)",
         "method": "PUT",
-        "url": "=https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $json.id }}",
+        "url": "=https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $parameter.id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"reviewUpdate\": $json.reviewUpdate }",
+        "jsonBody": "={\n  \"reviewUpdate\": {{ $parameter.reviewUpdate }}\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {"name": "id", "type": "number", "description": "File ID to update"},
+            {"name": "reviewUpdate", "type": "boolean", "description": "true=reviewed, false=not reviewed"}
+          ]
+        },
         "options": {}
       },
       "id": "tool-update",
@@ -137,12 +151,18 @@
         "name": "redeliverFile",
         "description": "Redeliver a file. Required: id (number). Optional: comment (string)",
         "method": "POST",
-        "url": "=https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $json.id }}/actions/redeliverarrivedfile",
+        "url": "=https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $parameter.id }}/actions/redeliverarrivedfile",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"redeliverComment\": $json.comment || \"Redelivery via AI assistant\" }",
+        "jsonBody": "={\n  \"redeliverComment\": \"{{ $parameter.comment || 'Redelivery via AI assistant' }}\"\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {"name": "id", "type": "number", "description": "File ID to redeliver"},
+            {"name": "comment", "type": "string", "description": "Optional comment"}
+          ]
+        },
         "options": {}
       },
       "id": "tool-redeliver",
@@ -162,12 +182,18 @@
         "name": "replayFile",
         "description": "Replay a file. Required: id (number). Optional: comment (string)",
         "method": "POST",
-        "url": "=https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $json.id }}/actions/replayarrivedfile",
+        "url": "=https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $parameter.id }}/actions/replayarrivedfile",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"replayComment\": $json.comment || \"Replay via AI assistant\" }",
+        "jsonBody": "={\n  \"replayComment\": \"{{ $parameter.comment || 'Replay via AI assistant' }}\"\n}",
+        "placeholderDefinitions": {
+          "values": [
+            {"name": "id", "type": "number", "description": "File ID to replay"},
+            {"name": "comment", "type": "string", "description": "Optional comment"}
+          ]
+        },
         "options": {}
       },
       "id": "tool-replay",
