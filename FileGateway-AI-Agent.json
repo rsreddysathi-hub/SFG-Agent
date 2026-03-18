@@ -1,9 +1,9 @@
 {
-  "name": "File Gateway AI Agent",
+  "name": "File Gateway AI Agent - Minimal",
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 File Gateway AI Agent\n\n**Simple & Working**\n\n✅ Self-contained - no sub-workflows\n✅ All tools built-in\n✅ Ready to import and use\n\n**Setup:**\n1. Import this workflow\n2. Configure OpenAI credentials\n3. Configure File Gateway credentials\n4. Manually connect tools in AI Agent node\n5. Activate and chat!",
+        "content": "## 🤖 File Gateway AI Agent\n\n**Minimal Version - Just Works**\n\n✅ ONE simple tool\n✅ No parameters\n✅ No validation issues\n\n**What it does:**\nReturns the last 10 files from File Gateway\n\n**Setup:**\n1. Import\n2. Add OpenAI credential\n3. Add File Gateway credential\n4. Connect tool in AI Agent\n5. Test!",
         "height": 380,
         "width": 500
       },
@@ -16,12 +16,12 @@
     {
       "parameters": {
         "public": true,
-        "initialMessages": "Hello! 👋 I'm your File Gateway AI Assistant.\n\nI can help you:\n• Query arrived files\n• Update file status\n• Redeliver files\n• Replay files\n\nWhat would you like to do?",
+        "initialMessages": "Hello! 👋 I can show you the latest files from File Gateway.\n\nJust ask: 'Show me the files'",
         "options": {
           "title": "File Gateway Assistant",
-          "subtitle": "IBM Sterling File Gateway",
-          "welcomeMessage": "Welcome! Ask me about your File Gateway files.",
-          "inputPlaceholder": "Ask me anything...",
+          "subtitle": "Minimal Version",
+          "welcomeMessage": "Welcome!",
+          "inputPlaceholder": "Ask me to show files...",
           "showWelcomeScreen": true
         }
       },
@@ -30,33 +30,28 @@
       "type": "@n8n/n8n-nodes-langchain.chatTrigger",
       "typeVersion": 1.1,
       "position": [600, 460],
-      "webhookId": "file-gateway-agent"
+      "webhookId": "file-gateway-minimal"
     },
     {
       "parameters": {
-        "options": {
-          "systemMessage": "You are a helpful AI assistant for IBM Sterling File Gateway.\n\nBe friendly and conversational. Ask clarifying questions before taking actions. Only call tools when the user explicitly requests an action.\n\nAvailable tools:\n- queryFiles: Search files by fileName, arrivedFileState, prodOrgName, limit\n- updateFile: Update file status (needs id and reviewUpdate)\n- redeliverFile: Redeliver a file (needs id, optional comment)\n- replayFile: Replay a file (needs id, optional comment)"
-        }
+        "options": {}
       },
       "id": "ai-agent",
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.6,
-      "position": [1000, 460]
+      "position": [900, 460]
     },
     {
       "parameters": {
         "model": "gpt-4o-mini",
-        "options": {
-          "temperature": 0.7,
-          "maxTokens": 1000
-        }
+        "options": {}
       },
       "id": "openai-model",
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
-      "position": [1200, 640],
+      "position": [1100, 640],
       "credentials": {
         "openAiApi": {
           "id": "openai-cred",
@@ -66,130 +61,19 @@
     },
     {
       "parameters": {
-        "sessionIdType": "customKey",
-        "sessionKey": "={{ $json.sessionId }}",
-        "contextWindowLength": 10
-      },
-      "id": "memory",
-      "name": "Window Buffer Memory",
-      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
-      "typeVersion": 1.2,
-      "position": [1200, 820]
-    },
-    {
-      "parameters": {
-        "name": "queryFiles",
-        "description": "Search arrived files. Call this tool to get a list of files. Returns all files by default.",
+        "name": "getFiles",
+        "description": "Get the latest 10 files from File Gateway. No parameters needed. Just call this tool to see the files.",
         "method": "GET",
-        "url": "https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/",
+        "url": "https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/?limit=10",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {"name": "limit", "value": "10"}
-          ]
-        },
         "options": {}
       },
-      "id": "tool-query",
-      "name": "Query Files",
+      "id": "tool-get-files",
+      "name": "Get Files",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
-      "position": [1200, 280],
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "fg-cred",
-          "name": "File Gateway API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "name": "updateFile",
-        "description": "Update file review status. Required: id (number), reviewUpdate (boolean - true for reviewed, false for not reviewed)",
-        "method": "PUT",
-        "url": "=https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $parameter.id }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpBasicAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"reviewUpdate\": {{ $parameter.reviewUpdate }}\n}",
-        "placeholderDefinitions": {
-          "values": [
-            {"name": "id", "type": "number", "description": "File ID to update"},
-            {"name": "reviewUpdate", "type": "boolean", "description": "true=reviewed, false=not reviewed"}
-          ]
-        },
-        "options": {}
-      },
-      "id": "tool-update",
-      "name": "Update File",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.1,
-      "position": [1200, 460],
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "fg-cred",
-          "name": "File Gateway API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "name": "redeliverFile",
-        "description": "Redeliver a file. Required: id (number). Optional: comment (string)",
-        "method": "POST",
-        "url": "=https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $parameter.id }}/actions/redeliverarrivedfile",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpBasicAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"redeliverComment\": \"{{ $parameter.comment || 'Redelivery via AI assistant' }}\"\n}",
-        "placeholderDefinitions": {
-          "values": [
-            {"name": "id", "type": "number", "description": "File ID to redeliver"},
-            {"name": "comment", "type": "string", "description": "Optional comment"}
-          ]
-        },
-        "options": {}
-      },
-      "id": "tool-redeliver",
-      "name": "Redeliver File",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.1,
-      "position": [1400, 280],
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "fg-cred",
-          "name": "File Gateway API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "name": "replayFile",
-        "description": "Replay a file. Required: id (number). Optional: comment (string)",
-        "method": "POST",
-        "url": "=https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/{{ $parameter.id }}/actions/replayarrivedfile",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpBasicAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"replayComment\": \"{{ $parameter.comment || 'Replay via AI assistant' }}\"\n}",
-        "placeholderDefinitions": {
-          "values": [
-            {"name": "id", "type": "number", "description": "File ID to replay"},
-            {"name": "comment", "type": "string", "description": "Optional comment"}
-          ]
-        },
-        "options": {}
-      },
-      "id": "tool-replay",
-      "name": "Replay File",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.1,
-      "position": [1400, 460],
+      "position": [1100, 280],
       "credentials": {
         "httpBasicAuth": {
           "id": "fg-cred",
@@ -205,18 +89,12 @@
     },
     "AI Agent": {
       "ai_languageModel": [[{"node": "OpenAI Chat Model", "type": "ai_languageModel", "index": 0}]],
-      "ai_memory": [[{"node": "Window Buffer Memory", "type": "ai_memory", "index": 0}]],
-      "ai_tool": [[
-        {"node": "Query Files", "type": "ai_tool", "index": 0},
-        {"node": "Update File", "type": "ai_tool", "index": 0},
-        {"node": "Redeliver File", "type": "ai_tool", "index": 0},
-        {"node": "Replay File", "type": "ai_tool", "index": 0}
-      ]]
+      "ai_tool": [[{"node": "Get Files", "type": "ai_tool", "index": 0}]]
     }
   },
   "active": false,
   "settings": {"executionOrder": "v1"},
   "versionId": "1",
-  "meta": {"instanceId": "fresh-start"},
+  "meta": {"instanceId": "minimal"},
   "tags": []
 }
