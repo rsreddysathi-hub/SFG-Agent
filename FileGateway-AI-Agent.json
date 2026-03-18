@@ -64,7 +64,7 @@
         "name": "getFiles",
         "description": "Get the latest 10 files from File Gateway. No parameters needed. Just call this tool to see the files.",
         "method": "GET",
-        "url": "https://api.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/?limit=10",
+        "url": "https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/?limit=10",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpBasicAuth",
         "options": {}
