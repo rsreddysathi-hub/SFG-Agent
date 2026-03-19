@@ -1,57 +1,275 @@
 {
-  "name": "File Gateway AI Agent - Minimal",
+  "name": "File Gateway AI Agent - Complete",
   "nodes": [
     {
       "parameters": {
-        "content": "## 🤖 File Gateway AI Agent\n\n**Minimal Version - Just Works**\n\n✅ ONE simple tool\n✅ No parameters\n✅ No validation issues\n\n**What it does:**\nReturns the last 10 files from File Gateway\n\n**Setup:**\n1. Import\n2. Add OpenAI credential\n3. Add File Gateway credential\n4. Connect tool in AI Agent\n5. Test!",
-        "height": 380,
-        "width": 500
+        "jsCode": "const validationData = $input.first().json;\n\nreturn {\n  json: {\n    output: validationData.message\n  }\n};"
       },
-      "id": "sticky-note",
-      "name": "Sticky Note",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [240, 240]
+      "id": "format-validation-error",
+      "name": "Format Validation Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2416, 2296]
     },
     {
       "parameters": {
-        "public": true,
-        "initialMessages": "Hello! 👋 I can show you the latest files from File Gateway.\n\nJust ask: 'Show me the files'",
+        "jsCode": "const items = $input.all();\nconst originalRequest = $('Extract API Config').first().json;\nconst filterReviewed = originalRequest.filterReviewed;\nconst filterState = originalRequest.filterState;\nconst filterDateFrom = originalRequest.filterDateFrom;\nconst filterDateTo = originalRequest.filterDateTo;\n\nconsole.log('Filter - filterReviewed:', filterReviewed);\nconsole.log('Filter - filterState:', filterState);\nconsole.log('Filter - filterDateFrom:', filterDateFrom);\nconsole.log('Filter - filterDateTo:', filterDateTo);\n\n// If no filters requested, return all items\nif (!filterReviewed && !filterState && !filterDateFrom && !filterDateTo) {\n  return items;\n}\n\n// Helper function to parse createTs format: \"2026-03-19 14:23:41.0\"\nfunction parseCreateTs(createTs) {\n  if (!createTs) return null;\n  // Extract date part: \"2026-03-19\"\n  const datePart = createTs.split(' ')[0];\n  return new Date(datePart);\n}\n\n// Parse filter dates\nconst dateFrom = filterDateFrom ? new Date(filterDateFrom) : null;\nconst dateTo = filterDateTo ? new Date(filterDateTo) : null;\n\n// Process each item\nconst processedItems = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Handle array response\n  if (Array.isArray(data)) {\n    const filtered = data.filter(file => {\n      let matchesReviewed = true;\n      let matchesState = true;\n      let matchesDate = true;\n      \n      if (filterReviewed) {\n        matchesReviewed = String(file.reviewed) === String(filterReviewed);\n      }\n      \n      if (filterState) {\n        matchesState = file.arrivedFileState === filterState;\n      }\n      \n      // Date filtering using createTs field\n      if (dateFrom || dateTo) {\n        const fileDate = parseCreateTs(file.createTs);\n        if (fileDate) {\n          if (dateFrom && fileDate < dateFrom) {\n            matchesDate = false;\n          }\n          if (dateTo) {\n            // Set dateTo to end of day for inclusive comparison\n            const dateToEnd = new Date(dateTo);\n            dateToEnd.setHours(23, 59, 59, 999);\n            if (fileDate > dateToEnd) {\n              matchesDate = false;\n            }\n          }\n        } else {\n          matchesDate = false; // No createTs, exclude from date filter\n        }\n      }\n      \n      console.log(`File ${file.arrivedFileKey}: state=${file.arrivedFileState}, createTs=${file.createTs}, matches=${matchesReviewed && matchesState && matchesDate}`);\n      return matchesReviewed && matchesState && matchesDate;\n    });\n    \n    // Add filtered array as single item\n    if (filtered.length > 0) {\n      processedItems.push({ json: filtered });\n    }\n  } else if (data && typeof data === 'object') {\n    // Handle single object\n    let matchesReviewed = true;\n    let matchesState = true;\n    let matchesDate = true;\n    \n    if (filterReviewed) {\n      matchesReviewed = String(data.reviewed) === String(filterReviewed);\n    }\n    \n    if (filterState) {\n      matchesState = data.arrivedFileState === filterState;\n    }\n    \n    // Date filtering\n    if (dateFrom || dateTo) {\n      const fileDate = parseCreateTs(data.createTs);\n      if (fileDate) {\n        if (dateFrom && fileDate < dateFrom) {\n          matchesDate = false;\n        }\n        if (dateTo) {\n          const dateToEnd = new Date(dateTo);\n          dateToEnd.setHours(23, 59, 59, 999);\n          if (fileDate > dateToEnd) {\n            matchesDate = false;\n          }\n        }\n      } else {\n        matchesDate = false;\n      }\n    }\n    \n    if (matchesReviewed && matchesState && matchesDate) {\n      processedItems.push(item);\n    }\n  }\n}\n\nconsole.log(`Filter result: ${processedItems.length} items`);\nreturn processedItems.length > 0 ? processedItems : [{ json: [] }];"
+      },
+      "id": "filter-by-reviewed",
+      "name": "Filter by Reviewed Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 1460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst originalRequest = $('Extract API Config').first().json;\nconst filterReviewed = originalRequest.filterReviewed;\nconst filterState = originalRequest.filterState;\n\n// Combine all items into single response\nlet allData = [];\nitems.forEach(item => {\n  if (Array.isArray(item.json)) {\n    allData = allData.concat(item.json);\n  } else {\n    allData.push(item.json);\n  }\n});\n\nconst method = originalRequest.method;\nconst endpoint = originalRequest.endpoint;\n\nlet message = '';\n\n// Format based on operation type\nif (method === 'GET') {\n  // Build filter description\n  const filters = [];\n  if (filterReviewed === '0') {\n    filters.push('unreviewed');\n  } else if (filterReviewed === '2') {\n    filters.push('reviewed');\n  }\n  if (filterState) {\n    filters.push(`state: ${filterState}`);\n  }\n  \n  const filterText = filters.length > 0 ? ` (${filters.join(', ')})` : '';\n  \n  if (allData.length === 0) {\n    message = `🔍 No files found${filterText}.\\n\\nTry adjusting your search criteria.`;\n  } else {\n    message = `📋 **Found ${allData.length} file(s)${filterText}:**\\n\\n`;\n    \n    allData.forEach((file, index) => {\n      // Status emoji\n      let statusEmoji = '❓';\n      if (file.arrivedFileState === 'Routed') statusEmoji = '✅';\n      else if (file.arrivedFileState === 'Failed') statusEmoji = '❌';\n      else if (file.arrivedFileState === 'Routing') statusEmoji = '🔄';\n      \n      // Reviewed emoji\n      const reviewedEmoji = file.reviewed === 2 ? '✓' : '○';\n      \n      message += `**${index + 1}. 📄 ${file.fileName || 'N/A'}**\\n`;\n      message += `   🔑 Key: \\`${file.arrivedFileKey}\\`\\n`;\n      message += `   ${statusEmoji} Status: **${file.arrivedFileState || 'Unknown'}**\\n`;\n      message += `   ${reviewedEmoji} Reviewed: ${file.reviewed === 2 ? 'Yes' : 'No'}\\n`;\n      \n      if (file.producerName) {\n        message += `   📤 Producer: ${file.producerName}\\n`;\n      }\n      if (file.consumerName) {\n        message += `   📥 Consumer: ${file.consumerName}\\n`;\n      }\n      if (file.arrivedTime) {\n        const date = new Date(file.arrivedTime);\n        const formattedDate = date.toLocaleString('en-US', {\n          year: 'numeric',\n          month: 'short',\n          day: 'numeric',\n          hour: '2-digit',\n          minute: '2-digit'\n        });\n        message += `   🕐 Arrived: ${formattedDate}\\n`;\n      }\n      if (file.fileSize) {\n        const sizeKB = (file.fileSize / 1024).toFixed(2);\n        message += `   💾 Size: ${sizeKB} KB\\n`;\n      }\n      \n      message += `\\n`;\n    });\n  }\n} else if (method === 'PUT') {\n  const fileKey = endpoint.split('/').pop();\n  message = `✅ **Successfully updated file**\\n\\n`;\n  message += `🔑 File Key: \\`${fileKey}\\`\\n`;\n  \n  if (originalRequest.body) {\n    message += `\\n**Changes made:**\\n`;\n    Object.entries(originalRequest.body).forEach(([key, value]) => {\n      if (key === 'reviewed') {\n        message += `   ✓ Marked as ${value === 2 ? 'reviewed' : 'unreviewed'}\\n`;\n      } else {\n        message += `   • ${key}: ${value}\\n`;\n      }\n    });\n  }\n} else if (method === 'POST') {\n  if (endpoint.includes('replay')) {\n    const fileKey = originalRequest.arrivedFileKey || endpoint.split('/')[2];\n    message = `▶️ **Successfully replayed file**\\n\\n`;\n    message += `🔑 File Key: \\`${fileKey}\\`\\n`;\n    if (originalRequest.body?.comments) {\n      message += `💬 Comments: ${originalRequest.body.comments}\\n`;\n    }\n  } else if (endpoint.includes('redeliver')) {\n    const fileKey = originalRequest.arrivedFileKey || endpoint.split('/')[2];\n    message = `🔄 **Successfully redelivered file**\\n\\n`;\n    message += `🔑 File Key: \\`${fileKey}\\`\\n`;\n    if (originalRequest.body?.consumerName) {\n      message += `📥 Consumer: ${originalRequest.body.consumerName}\\n`;\n    }\n    if (originalRequest.body?.comments) {\n      message += `💬 Comments: ${originalRequest.body.comments}\\n`;\n    }\n  } else {\n    message = `✅ **Operation completed successfully**\\n\\n`;\n    message += `📋 Details: ${JSON.stringify(allData, null, 2)}\\n`;\n  }\n}\n\nreturn {\n  json: {\n    output: message\n  }\n};"
+      },
+      "id": "format-api-response",
+      "name": "Format API Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2840, 1648]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com:443/B2BAPIs/svc{{ $json.endpoint }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
         "options": {
-          "title": "File Gateway Assistant",
-          "subtitle": "Minimal Version",
-          "welcomeMessage": "Welcome!",
-          "inputPlaceholder": "Ask me to show files...",
-          "showWelcomeScreen": true
+          "allowUnauthorizedCerts": true
         }
       },
-      "id": "chat-trigger",
-      "name": "When chat message received",
-      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
-      "typeVersion": 1.1,
-      "position": [600, 460],
-      "webhookId": "file-gateway-minimal"
+      "id": "file-gateway-api-put",
+      "name": "File Gateway API - PUT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2416, 2152],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "fg-cred",
+          "name": "File Gateway API"
+        }
+      }
     },
     {
       "parameters": {
-        "options": {}
+        "method": "POST",
+        "url": "=https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com:443/B2BAPIs/svc{{ $json.endpoint }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
-      "id": "ai-agent",
-      "name": "AI Agent",
-      "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1.6,
-      "position": [900, 460]
+      "id": "file-gateway-api-post",
+      "name": "File Gateway API - POST",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2416, 1960],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "fg-cred",
+          "name": "File Gateway API"
+        }
+      }
     },
     {
       "parameters": {
-        "model": "gpt-4o-mini",
+        "url": "={{ Object.keys($json.queryParams || {}).length > 0 ? 'https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com:443/B2BAPIs/svc' + $json.endpoint + '?' + Object.entries($json.queryParams).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&') : 'https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com:443/B2BAPIs/svc' + $json.endpoint }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "file-gateway-api-get",
+      "name": "File Gateway API - GET",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2416, 1760],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "fg-cred",
+          "name": "File Gateway API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.validationError }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "validation_error"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.method }}",
+                    "rightValue": "GET",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "GET"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.method }}",
+                    "rightValue": "POST",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "POST"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.method }}",
+                    "rightValue": "PUT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PUT"
+            }
+          ]
+        },
         "options": {}
       },
-      "id": "openai-model",
-      "name": "OpenAI Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1,
-      "position": [1100, 640],
+      "id": "switch-by-method",
+      "name": "Switch by HTTP Method",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [2208, 1952]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst aiResponse = inputData.choices[0].message.content;\n\nconsole.log('AI Response:', aiResponse);\n\nlet apiConfig;\ntry {\n  let cleanResponse = aiResponse\n    .replace(/```json\\n?/g, '')\n    .replace(/```\\n?/g, '')\n    .trim();\n  \n  cleanResponse = cleanResponse.replace(/,\\s*([}\\]])/g, '$1');\n  \n  const jsonMatch = cleanResponse.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    apiConfig = JSON.parse(jsonMatch[0]);\n  } else {\n    apiConfig = JSON.parse(cleanResponse);\n  }\n} catch (error) {\n  return {\n    json: {\n      validationError: true,\n      message: \"😊 I'm having trouble understanding that. Let me help you!\\n\\n**What would you like to do?**\\n• View files: 'Show me the files'\\n• Update file: 'Update file ABC123 mark as reviewed'\\n• Redeliver files: 'Redeliver files ABC123, XYZ789 to consumer Test with comments Batch'\\n• Replay files: 'Replay files ABC123, XYZ789 with comments Batch replay'\\n\\nTry one of these!\"\n    }\n  };\n}\n\nconsole.log('Parsed API Config:', JSON.stringify(apiConfig, null, 2));\n\nif (!apiConfig.method || !apiConfig.endpoint) {\n  return {\n    json: {\n      validationError: true,\n      message: \"🤔 I'm not sure what you'd like to do. Let me help!\\n\\n**Choose an action:**\\n📋 **View files**: 'Show me all files'\\n✏️ **Update**: 'Update file ABC123'\\n🔄 **Redeliver**: 'Redeliver files ABC123, XYZ789 to consumer Test with comments Batch'\\n▶️ **Replay**: 'Replay files ABC123, XYZ789 with comments Batch replay'\\n\\nWhat would you like to do?\"\n    }\n  };\n}\n\napiConfig.method = apiConfig.method.toUpperCase();\n\nif (apiConfig.method === 'CONVERSATION') {\n  return {\n    json: {\n      validationError: true,\n      message: \"🔍 I need more information to help you!\\n\\n**💡 Tip:** Try these commands:\\n• 'Show me all files'\\n• 'Update file [arrivedFileKey] mark as reviewed'\\n• 'Redeliver files [keys] to consumer XYZ with comments Testing'\\n• 'Replay files [keys] with comments Manual replay'\\n\\nWhat would you like to do?\"\n    }\n  };\n}\n\nif (!apiConfig.endpoint.startsWith('/')) {\n  apiConfig.endpoint = '/' + apiConfig.endpoint;\n}\n\n// Handle multiple arrivedFileKeys for batch operations\nif (apiConfig.arrivedFileKeys && Array.isArray(apiConfig.arrivedFileKeys) && apiConfig.arrivedFileKeys.length > 0) {\n  // Validate comments for batch replay/redeliver\n  if (apiConfig.endpoint.includes('/replayarrivedfile')) {\n    if (!apiConfig.body || !apiConfig.body.comments || apiConfig.body.comments.trim() === '') {\n      return {\n        json: {\n          validationError: true,\n          message: \"💬 **Comments are required for replay!**\\n\\nPlease provide comments for batch replay.\\n\\n**Example:**\\n'Replay files ABC123, XYZ789 with comments Batch replay due to error'\\n\\nWhat are your comments?\"\n        }\n      };\n    }\n  } else if (apiConfig.endpoint.includes('/redeliverarrivedfile')) {\n    if (!apiConfig.body || !apiConfig.body.consumerName) {\n      return {\n        json: {\n          validationError: true,\n          message: \"🔄 To redeliver files, I need:\\n1. arrivedFileKeys\\n2. Consumer name\\n3. Comments\\n\\n**Example:**\\n'Redeliver files ABC123, XYZ789 to consumer Test with comments Batch redeliver'\\n\\nWhat would you like to do?\"\n        }\n      };\n    }\n    if (!apiConfig.body.comments || apiConfig.body.comments.trim() === '') {\n      return {\n        json: {\n          validationError: true,\n          message: \"💬 **Comments are required for redelivery!**\\n\\nPlease provide comments for batch redelivery.\\n\\n**Example:**\\n'Redeliver files ABC123, XYZ789 to consumer Test with comments Batch redeliver for testing'\\n\\nWhat are your comments?\"\n        }\n      };\n    }\n  }\n  \n  // Create multiple items, one for each arrivedFileKey\n  const items = apiConfig.arrivedFileKeys.map(key => {\n    const endpoint = apiConfig.endpoint.replace('/actions/', `/${key}/actions/`);\n    return {\n      json: {\n        method: apiConfig.method,\n        endpoint: endpoint,\n        body: apiConfig.body,\n        queryParams: apiConfig.queryParams || {},\n        filterReviewed: apiConfig.filterReviewed,\n        filterState: apiConfig.filterState,\n        isBatch: true,\n        batchCount: apiConfig.arrivedFileKeys.length,\n        arrivedFileKey: key\n      }\n    };\n  });\n  \n  console.log(`Created ${items.length} batch items`);\n  return items;\n}\n\n// Validate PUT requires ID\nif (apiConfig.method === 'PUT') {\n  if (apiConfig.endpoint === '/fgarrivedfiles/' || !apiConfig.endpoint.includes('/fgarrivedfiles/')) {\n    return {\n      json: {\n        validationError: true,\n        message: \"🔍 To update a file, I need the arrivedFileKey!\\n\\n**💡 Tip:** If you don't know the arrivedFileKey, list files first:\\n• 'Show me all files'\\n\\n**Then provide the arrivedFileKey:**\\n• 'Update file ABC123 mark as reviewed'\\n\\nWhat would you like to do?\"\n      }\n    };\n  }\n  if (!apiConfig.body || typeof apiConfig.body !== 'object' || Object.keys(apiConfig.body).length === 0) {\n    return {\n      json: {\n        validationError: true,\n        message: \"✏️ To update a file, **tell me what you want to change**.\\n\\n**Example:**\\n'Update file ABC123: mark as reviewed, reviewed to 2'\\n\\nWhat would you like to update?\"\n      }\n    };\n  }\n}\n\n// Validate POST operations (single file)\nif (apiConfig.method === 'POST') {\n  if (apiConfig.endpoint.includes('/redeliverarrivedfile')) {\n    if (!apiConfig.body || !apiConfig.body.consumerName) {\n      return {\n        json: {\n          validationError: true,\n          message: \"🔄 To redeliver a file, I need:\\n1. arrivedFileKey\\n2. Consumer name\\n3. Comments\\n\\n**Example:**\\n'Redeliver file ABC123 to consumer TestConsumer with comments Redelivering for testing'\\n\\nWhat would you like to do?\"\n        }\n      };\n    }\n    if (!apiConfig.body.comments || apiConfig.body.comments.trim() === '') {\n      return {\n        json: {\n          validationError: true,\n          message: \"💬 **Comments are required for redelivery!**\\n\\nPlease provide comments explaining why you're redelivering this file.\\n\\n**Example:**\\n'Redeliver file ABC123 to consumer TestConsumer with comments Redelivering due to processing error'\\n\\nWhat are your comments?\"\n        }\n      };\n    }\n  } else if (apiConfig.endpoint.includes('/replayarrivedfile')) {\n    if (apiConfig.endpoint === '/fgarrivedfiles/actions/replayarrivedfile' || !apiConfig.endpoint.match(/\\/fgarrivedfiles\\/[^\\/]+\\/actions\\/replayarrivedfile/)) {\n      return {\n        json: {\n          validationError: true,\n          message: \"▶️ To replay a file, I need:\\n1. arrivedFileKey\\n2. Comments\\n\\n**Example:**\\n'Replay file ABC123 with comments Manual replay due to error'\\n\\nWhat would you like to do?\"\n        }\n      };\n    }\n    if (!apiConfig.body || !apiConfig.body.comments || apiConfig.body.comments.trim() === '') {\n      return {\n        json: {\n          validationError: true,\n          message: \"💬 **Comments are required for replay!**\\n\\nPlease provide comments explaining why you're replaying this file.\\n\\n**Example:**\\n'Replay file ABC123 with comments Replaying due to processing failure'\\n\\nWhat are your comments?\"\n        }\n      };\n    }\n  }\n}\n\nif (apiConfig.method === 'GET') {\n  apiConfig.body = null;\n}\n\nif (!apiConfig.queryParams || typeof apiConfig.queryParams !== 'object') {\n  apiConfig.queryParams = {};\n} else {\n  const cleanedParams = {};\n  for (const [key, value] of Object.entries(apiConfig.queryParams)) {\n    if (key && key.trim() !== '') {\n      cleanedParams[key] = value;\n    }\n  }\n  apiConfig.queryParams = cleanedParams;\n}\n\nconsole.log('Final API Config:', JSON.stringify(apiConfig, null, 2));\n\nreturn {\n  json: apiConfig\n};"
+      },
+      "id": "extract-api-config",
+      "name": "Extract API Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1984, 1952]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "parse-api-config",
+      "name": "Parse API Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 1952],
       "credentials": {
         "openAiApi": {
           "id": "openai-cred",
@@ -61,42 +279,235 @@
     },
     {
       "parameters": {
-        "name": "getFiles",
-        "description": "Get the latest 10 files from File Gateway. No parameters needed. Just call this tool to see the files.",
-        "method": "GET",
-        "url": "https://api.dev01.apps.itz-a1ptvm.hub01-lb.techzone.ibm.com/B2BAPIs/svc/fgarrivedfiles/?limit=10",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpBasicAuth",
-        "options": {
-          "skipSslCertificateValidation": true
-        }
+        "jsCode": "const userMessage = $input.first().json.userMessage;\n\nconst requestBody = {\n  model: \"gpt-3.5-turbo\",\n  temperature: 0,\n  max_tokens: 800,\n  messages: [\n    {\n      role: \"system\",\n      content: \"Convert File Gateway requests to JSON. Respond ONLY with valid JSON, no explanations.\\n\\nCRITICAL RULES:\\n- ID is the arrivedFileKey field (string key), NOT the fileName\\n- fileName is ONLY for searching in queryParams\\n- For update/redeliver/replay: use arrivedFileKey in endpoint, NOT fileName\\n- MULTIPLE FILES: If multiple arrivedFileKeys provided, put them in arrivedFileKeys array\\n- Extract ONLY values explicitly mentioned\\n- Missing fields = null\\n- For search: use queryParams\\n- Default endpoint: /fgarrivedfiles/\\n- Redeliver REQUIRES: arrivedFileKey(s), consumerName, comments\\n- Replay REQUIRES: arrivedFileKey(s), comments\\n- Reviewed field: When user says 'mark as reviewed' or 'set reviewed', automatically set reviewed: 2 in body\\n- Reviewed field values: 0=not reviewed, 2=reviewed (system-generated)\\n- If user asks for unreviewed/not reviewed files, add filterReviewed: '0' to response\\n- If user asks for reviewed files, add filterReviewed: '2' to response\\n- arrivedFileState field values: Routed, Failed, Routing (case-sensitive, exact match required)\\n- CRITICAL: When user says 'error', 'failed', 'failure', 'fail' → use filterState: 'Failed' (capital F)\\n- If user asks for files with state/status routed, add filterState: 'Routed'\\n- If user asks for files with state/status routing, add filterState: 'Routing'\\n- IMPORTANT: User terms 'error'/'failed'/'failure' ALL map to API value 'Failed'\\n- DATE FILTERING: Extract dates from user queries and add filterDateFrom and/or filterDateTo\\n- Date format: YYYY-MM-DD (e.g., 2024-01-15)\\n- Recognize: 'between X and Y', 'from X to Y', 'after X', 'before Y', 'on X', 'today', 'yesterday'\\n- 'today' = current date, 'yesterday' = previous date\\n\\nFormat: {\\\"method\\\":\\\"GET|POST|PUT\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{},\\\"filterReviewed\\\":null,\\\"filterState\\\":null,\\\"filterDateFrom\\\":null,\\\"filterDateTo\\\":null,\\\"arrivedFileKeys\\\":null}\\n\\nGET: body=null, queryParams for filters, filterReviewed for client-side filtering (0 or 2), filterState for client-side state filtering (Routed, Failed, Routing), filterDateFrom/filterDateTo for date range filtering\\nPUT: endpoint=/fgarrivedfiles/{arrivedFileKey}, body={ONLY fields to change, reviewed:2 if marking as reviewed}\\nPOST redeliver: endpoint=/fgarrivedfiles/{arrivedFileKey}/actions/redeliverarrivedfile, body={\\\"consumerName\\\":\\\"name\\\",\\\"comments\\\":\\\"text\\\"}, arrivedFileKeys=[keys] for multiple\\nPOST replay: endpoint=/fgarrivedfiles/{arrivedFileKey}/actions/replayarrivedfile, body={\\\"comments\\\":\\\"text\\\"}, arrivedFileKeys=[keys] for multiple\\n\\nExamples:\\n\\n'get all files' -> {\\\"method\\\":\\\"GET\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{\\\"limit\\\":\\\"10\\\"},\\\"filterReviewed\\\":null,\\\"filterState\\\":null,\\\"filterDateFrom\\\":null,\\\"filterDateTo\\\":null,\\\"arrivedFileKeys\\\":null}\\n\\n'show files received today' -> {\\\"method\\\":\\\"GET\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{\\\"limit\\\":\\\"50\\\"},\\\"filterReviewed\\\":null,\\\"filterState\\\":null,\\\"filterDateFrom\\\":\\\"2026-03-19\\\",\\\"filterDateTo\\\":\\\"2026-03-19\\\",\\\"arrivedFileKeys\\\":null}\\n\\n'get files between 2024-01-01 and 2024-01-31' -> {\\\"method\\\":\\\"GET\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{\\\"limit\\\":\\\"100\\\"},\\\"filterReviewed\\\":null,\\\"filterState\\\":null,\\\"filterDateFrom\\\":\\\"2024-01-01\\\",\\\"filterDateTo\\\":\\\"2024-01-31\\\",\\\"arrivedFileKeys\\\":null}\\n\\n'show failed files from last week' -> {\\\"method\\\":\\\"GET\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{\\\"limit\\\":\\\"50\\\"},\\\"filterReviewed\\\":null,\\\"filterState\\\":\\\"Failed\\\",\\\"filterDateFrom\\\":\\\"2026-03-12\\\",\\\"filterDateTo\\\":\\\"2026-03-19\\\",\\\"arrivedFileKeys\\\":null}\\n\\n'get files after 2024-03-01' -> {\\\"method\\\":\\\"GET\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{\\\"limit\\\":\\\"50\\\"},\\\"filterReviewed\\\":null,\\\"filterState\\\":null,\\\"filterDateFrom\\\":\\\"2024-03-01\\\",\\\"filterDateTo\\\":null,\\\"arrivedFileKeys\\\":null}\\n\\n'show me unreviewed files' -> {\\\"method\\\":\\\"GET\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{\\\"limit\\\":\\\"50\\\"},\\\"filterReviewed\\\":\\\"0\\\",\\\"filterState\\\":null,\\\"filterDateFrom\\\":null,\\\"filterDateTo\\\":null,\\\"arrivedFileKeys\\\":null}\\n\\n'get files with status error' -> {\\\"method\\\":\\\"GET\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/\\\",\\\"body\\\":null,\\\"queryParams\\\":{\\\"limit\\\":\\\"50\\\"},\\\"filterReviewed\\\":null,\\\"filterState\\\":\\\"Failed\\\",\\\"filterDateFrom\\\":null,\\\"filterDateTo\\\":null,\\\"arrivedFileKeys\\\":null}\\n\\n'mark file ABC123 as reviewed' -> {\\\"method\\\":\\\"PUT\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/ABC123\\\",\\\"body\\\":{\\\"reviewed\\\":2},\\\"queryParams\\\":{},\\\"filterReviewed\\\":null,\\\"filterState\\\":null,\\\"filterDateFrom\\\":null,\\\"filterDateTo\\\":null,\\\"arrivedFileKeys\\\":null}\\n\\n'replay files ABC123, XYZ789 with comments AgentReplay' -> {\\\"method\\\":\\\"POST\\\",\\\"endpoint\\\":\\\"/fgarrivedfiles/actions/replayarrivedfile\\\",\\\"body\\\":{\\\"comments\\\":\\\"AgentReplay\\\"},\\\"queryParams\\\":{},\\\"filterReviewed\\\":null,\\\"filterState\\\":null,\\\"filterDateFrom\\\":null,\\\"filterDateTo\\\":null,\\\"arrivedFileKeys\\\":[\\\"ABC123\\\",\\\"XYZ789\\\"]}\"\n    },\n    {\n      role: \"user\",\n      content: userMessage\n    }\n  ]\n};\n\nreturn {\n  json: requestBody\n};"
       },
-      "id": "tool-get-files",
-      "name": "Get Files",
-      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
-      "typeVersion": 1.1,
-      "position": [1100, 280],
+      "id": "build-api-config-request",
+      "name": "Build API Config Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1536, 1952]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst aiResponse = inputData.choices[0].message.content;\n\nreturn {\n  json: {\n    output: aiResponse\n  }\n};"
+      },
+      "id": "format-conversation-response",
+      "name": "Format Conversation Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1984, 1152]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "generate-conversation-response",
+      "name": "Generate Conversation Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 1152],
       "credentials": {
-        "httpBasicAuth": {
-          "id": "fg-cred",
-          "name": "File Gateway API"
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage = $input.first().json.userMessage;\n\nconst requestBody = {\n  model: \"gpt-3.5-turbo\",\n  temperature: 0.7,\n  max_tokens: 600,\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are a helpful assistant for IBM Sterling File Gateway. You help users manage arrived files.\\n\\nYou can help with:\\n- Getting/listing arrived files\\n- Searching/filtering files by name, producer, consumer, status, date range, etc.\\n- Updating file properties\\n- Redelivering files to consumers\\n- Replaying files\\n\\nWhen users ask what you can do, provide these examples:\\n\\n**Get files:**\\n'Show me all files'\\n'Get the last 10 files'\\n'Show me 20 files'\\n\\n**Search files:**\\n'Find files with name test.txt'\\n'Search files from producer ABC'\\n'Show files for consumer XYZ'\\n'Get files with status failed'\\n'Show unreviewed files'\\n\\n**Search by date:**\\n'Show files received today'\\n'Get files from yesterday'\\n'Show files between 2024-01-01 and 2024-01-31'\\n'Get files received after 2024-03-01'\\n'Show failed files from last week'\\n\\nYou can filter by:\\n- fileName\\n- producerName\\n- consumerName\\n- arrivedFileState (Failed, Routed, Routing)\\n- reviewed status (reviewed/unreviewed)\\n- date range (today, yesterday, between dates, after/before date)\\n- limit (number of files)\\n\\n**Update a file (requires arrivedFileKey):**\\n'Update file [arrivedFileKey]: mark as reviewed'\\nExample: 'Update file ABC123: mark as reviewed'\\n\\n**Redeliver a file (requires arrivedFileKey and consumer):**\\n'Redeliver file [arrivedFileKey] to consumer [name] with comments [text]'\\nExample: 'Redeliver file ABC123 to consumer TestConsumer with comments Redelivering for testing'\\n\\n**Replay a file (requires arrivedFileKey):**\\n'Replay file [arrivedFileKey] with comments [text]'\\nExample: 'Replay file ABC123 with comments Manual replay due to error'\\n\\n**Batch operations:**\\n'Replay files ABC123, XYZ789 with comments Batch replay'\\n'Redeliver files ABC123, XYZ789 to consumer Test with comments Batch redeliver'\\n\\nIMPORTANT:\\n- For updates, redelivery, and replay, you need the arrivedFileKey (shown as 🔑 Key in results)\\n- For redelivery, you also need the consumer name and comments\\n- For replay, you need comments\\n- To get arrivedFileKeys, first list or search for files\\n- You can operate on multiple files at once\\n- Date filtering uses the createTs field (file creation timestamp)\\n\\nBe friendly and provide these examples when asked.\"\n    },\n    {\n      role: \"user\",\n      content: userMessage\n    }\n  ]\n};\n\nreturn {\n  json: requestBody\n};"
+      },
+      "id": "build-conversation-request",
+      "name": "Build Conversation Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1536, 1152]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "conversation",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "conversation"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "api_call",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "api_call"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-by-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1328, 1560]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst aiResponse = inputData.choices[0].message.content;\n\nlet intent;\ntry {\n  const cleanResponse = aiResponse.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  intent = JSON.parse(cleanResponse);\n} catch (error) {\n  intent = { intent: \"conversation\", reason: \"Parse error\" };\n}\n\nconst userMessage = $('When chat message received').first().json.chatInput;\n\nreturn {\n  json: {\n    intent: intent.intent,\n    reason: intent.reason,\n    userMessage: userMessage\n  }\n};"
+      },
+      "id": "parse-intent",
+      "name": "Parse Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1104, 1560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "classify-intent",
+      "name": "Classify Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 1560],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const userMessage = $input.first().json.chatInput;\n\nconst requestBody = {\n  model: \"gpt-3.5-turbo\",\n  temperature: 0,\n  max_tokens: 150,\n  messages: [\n    {\n      role: \"system\",\n      content: \"Classify user intent. Respond with ONLY a JSON object:\\n{\\\"intent\\\":\\\"conversation|api_call\\\",\\\"reason\\\":\\\"brief explanation\\\"}\\n\\nIntent types:\\n- conversation: Questions about capabilities, help, how-to, examples, greetings\\n- api_call: Actual requests to perform operations with specific data (get files, update file X, redeliver file Y, replay file Z)\\n\\nExamples:\\nUser: 'What can you help with?' -> {\\\"intent\\\":\\\"conversation\\\",\\\"reason\\\":\\\"Help question\\\"}\\nUser: 'Show me files' -> {\\\"intent\\\":\\\"api_call\\\",\\\"reason\\\":\\\"Get files request\\\"}\\nUser: 'Update file ABC123' -> {\\\"intent\\\":\\\"api_call\\\",\\\"reason\\\":\\\"Update request\\\"}\\nUser: 'Hello' -> {\\\"intent\\\":\\\"conversation\\\",\\\"reason\\\":\\\"Greeting\\\"}\"\n    },\n    {\n      role: \"user\",\n      content: `Classify: ${userMessage}`\n    }\n  ]\n};\n\nreturn {\n  json: requestBody\n};"
+      },
+      "id": "build-intent-classification-request",
+      "name": "Build Intent Classification Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [656, 1560]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "chat-trigger",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [448, 1560],
+      "webhookId": "file-gateway-complete"
     }
   ],
   "pinData": {},
   "connections": {
-    "When chat message received": {
-      "main": [[{"node": "AI Agent", "type": "main", "index": 0}]]
+    "Filter by Reviewed Status": {
+      "main": [[{"node": "Format API Response", "type": "main", "index": 0}]]
     },
-    "AI Agent": {
-      "ai_languageModel": [[{"node": "OpenAI Chat Model", "type": "ai_languageModel", "index": 0}]],
-      "ai_tool": [[{"node": "Get Files", "type": "ai_tool", "index": 0}]]
+    "File Gateway API - PUT": {
+      "main": [[{"node": "Format API Response", "type": "main", "index": 0}]]
+    },
+    "File Gateway API - POST": {
+      "main": [[{"node": "Format API Response", "type": "main", "index": 0}]]
+    },
+    "File Gateway API - GET": {
+      "main": [[{"node": "Filter by Reviewed Status", "type": "main", "index": 0}]]
+    },
+    "Switch by HTTP Method": {
+      "main": [
+        [{"node": "Format Validation Error", "type": "main", "index": 0}],
+        [{"node": "File Gateway API - GET", "type": "main", "index": 0}],
+        [{"node": "File Gateway API - POST", "type": "main", "index": 0}],
+        [{"node": "File Gateway API - PUT", "type": "main", "index": 0}]
+      ]
+    },
+    "Extract API Config": {
+      "main": [[{"node": "Switch by HTTP Method", "type": "main", "index": 0}]]
+    },
+    "Parse API Config": {
+      "main": [[{"node": "Extract API Config", "type": "main", "index": 0}]]
+    },
+    "Build API Config Request": {
+      "main": [[{"node": "Parse API Config", "type": "main", "index": 0}]]
+    },
+    "Generate Conversation Response": {
+      "main": [[{"node": "Format Conversation Response", "type": "main", "index": 0}]]
+    },
+    "Build Conversation Request": {
+      "main": [[{"node": "Generate Conversation Response", "type": "main", "index": 0}]]
+    },
+    "Route by Intent": {
+      "main": [
+        [{"node": "Build Conversation Request", "type": "main", "index": 0}],
+        [{"node": "Build API Config Request", "type": "main", "index": 0}]
+      ]
+    },
+    "Parse Intent": {
+      "main": [[{"node": "Route by Intent", "type": "main", "index": 0}]]
+    },
+    "Classify Intent": {
+      "main": [[{"node": "Parse Intent", "type": "main", "index": 0}]]
+    },
+    "Build Intent Classification Request": {
+      "main": [[{"node": "Classify Intent", "type": "main", "index": 0}]]
+    },
+    "When chat message received": {
+      "main": [[{"node": "Build Intent Classification Request", "type": "main", "index": 0}]]
     }
   },
   "active": false,
-  "settings": {"executionOrder": "v1"},
-  "versionId": "1",
-  "meta": {"instanceId": "minimal"},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "complete-v1",
+  "meta": {
+    "instanceId": "file-gateway-complete"
+  },
   "tags": []
 }
